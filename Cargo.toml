@@ -4,6 +4,12 @@ version = "0.1.0"
 authors = ["jsen- <max.enhanced@gmail.com>"]
 edition = "2018"
 
+[profile.release]
+opt-level = "z"  # Optimize for size.
+lto = true
+codegen-units = 1
+panic = "abort"
+
 [dependencies]
 structopt = { version = "0.2.18", default_features = false, features = ["suggestions", "color", "wrap_help"] }
 json = "0.11.14"
