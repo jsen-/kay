@@ -67,9 +67,27 @@ enum VarsFormat {
 impl VarsFormat {
     pub fn from_extension<P: AsRef<Path>>(path: P) -> Option<VarsFormat> {
         match path.as_ref().extension().and_then(OsStr::to_str) {
-            Some("yaml") => Some(VarsFormat::Yaml),
+            Some("yaml") | Some("yml") => Some(VarsFormat::Yaml),
             Some("json") => Some(VarsFormat::Json),
             _ => None,
+        }
+    }
+}
+impl std::str::FromStr for VarsFormat {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "json" => Ok(VarsFormat::Json),
+            "yaml" => Ok(VarsFormat::Yaml),
+            _ => Err(String::from(r#"only "json" and "yaml" are supported"#)),
+        }
+    }
+}
+impl std::fmt::Debug for VarsFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            VarsFormat::Json => write!(f, "json"),
+            VarsFormat::Yaml => write!(f, "yaml"),
         }
     }
 }
@@ -117,26 +135,6 @@ impl EmptyVars {
     }
 }
 
-impl std::str::FromStr for VarsFormat {
-    type Err = String;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "json" => Ok(VarsFormat::Json),
-            "yaml" => Ok(VarsFormat::Yaml),
-            _ => Err(String::from(r#"only "json" and "yaml" are supported"#)),
-        }
-    }
-}
-
-impl std::fmt::Debug for VarsFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            VarsFormat::Json => write!(f, "json"),
-            VarsFormat::Yaml => write!(f, "yaml"),
-        }
-    }
-}
-
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "kay",
@@ -170,6 +168,9 @@ fn main() -> Result<()> {
         })?;
         Box::new(BufReader::new(file))
     } else {
+        if atty::is(atty::Stream::Stdin) {
+            eprintln!("No input file provided, reading from stdin ...");
+        }
         Box::new(stdin.lock())
     };
 

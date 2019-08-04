@@ -40,7 +40,7 @@ fn translate_expr<R: Iterator<Item = io::Result<char>>, W: Write>(
 
     let (expr_type, expr_path) = if &s[0..4] == "env " {
         (ExprType::Env, &s[4..])
-    } else if &s[0..3] == "var " {
+    } else if &s[0..4] == "var " {
         (ExprType::Var, &s[4..])
     } else {
         return Err(io::Error::new(
@@ -71,7 +71,7 @@ fn translate_expr<R: Iterator<Item = io::Result<char>>, W: Write>(
             None => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!(
-                    r#"Invalid expression: environment variable "{}" not found in vars"#,
+                    r#"Invalid expression: environment variable "{}" not found"#,
                     expr_path
                 ),
             )),
