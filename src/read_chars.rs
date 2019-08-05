@@ -1,4 +1,4 @@
-use std::io::{self, Error, ErrorKind, Read, Result};
+use std::io::{Error, ErrorKind, Read, Result};
 
 pub struct Chars<R> {
     inner: R,

@@ -1,81 +1,26 @@
-use super::{PositionIterator, Vars};
-use std::io::{self, Read, Write};
+use super::{Vars, VarsError};
+use std::io::{self, Write};
 
-enum Intent {
-    Continue,
-    Stop,
+mod expr;
+
+use expr::{translate_expr};
+pub use expr::{ExprError, ExprInternalError};
+
+pub enum TranslateError {
+    Input(io::Error),
+    Output(io::Error),
+    Expr(ExprError),
+    Vars(VarsError),
 }
 
-enum ExprType {
-    Env,
-    Var,
+impl From<VarsError> for TranslateError {
+    fn from(from: VarsError) -> TranslateError {
+        TranslateError::Vars(from)
+    }
 }
-
-fn translate_expr<R: Iterator<Item = io::Result<char>>, W: Write>(
-    input_chars: &mut R,
-    output: &mut W,
-    vars: &Box<dyn Vars>,
-) -> io::Result<()> {
-    let mut s = String::new();
-    loop {
-        match input_chars.next() {
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Invalid expression: unexpected end of input",
-                ))
-            }
-            Some(Err(e)) => return Err(e),
-            Some(Ok(ch)) if ch == '}' => break,
-            Some(Ok(ch)) => s.push(ch),
-        }
-    }
-
-    if s.bytes().len() < 4 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid expression: unknown expression type",
-        ));
-    }
-
-    let (expr_type, expr_path) = if &s[0..4] == "env " {
-        (ExprType::Env, &s[4..])
-    } else if &s[0..4] == "var " {
-        (ExprType::Var, &s[4..])
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid expression: unknown expression type",
-        ));
-    };
-    match expr_type {
-        ExprType::Var => match vars.get(expr_path) {
-            Some(value) => {
-                output.write(value.as_bytes())?;
-                Ok(())
-            }
-            None => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    r#"Invalid expression: expression "{}" not found in vars"#,
-                    expr_path
-                ),
-            )),
-        },
-        ExprType::Env => match std::env::var_os(expr_path) {
-            Some(value) => {
-                use std::os::unix::ffi::OsStrExt; // linux only for now ... sorry
-                output.write(value.as_bytes())?;
-                Ok(())
-            }
-            None => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    r#"Invalid expression: environment variable "{}" not found"#,
-                    expr_path
-                ),
-            )),
-        },
+impl From<ExprError> for TranslateError {
+    fn from(from: ExprError) -> TranslateError {
+        TranslateError::Expr(from)
     }
 }
 
@@ -83,19 +28,19 @@ pub fn translate<R: Iterator<Item = io::Result<char>>, W: Write>(
     input_chars: &mut R,
     output: &mut W,
     vars: &Box<dyn Vars>,
-) -> io::Result<()> {
+) -> Result<(), TranslateError> {
     let mut slash = false;
     let mut dollar = false;
 
     while let Some(rch) = input_chars.next() {
         match rch {
-            Err(e) => return Err(e),
+            Err(e) => return Err(TranslateError::Input(e)),
             Ok(ch) => {
                 if slash {
                     if ch == '$' {
-                        output.write(b"$")?;
+                        output.write(b"$").map_err(TranslateError::Output)?;
                     } else if ch == '\\' {
-                        output.write(b"\\\\")?;
+                        output.write(b"\\\\").map_err(TranslateError::Output)?;
                     }
                     slash = false;
                 } else if dollar {
@@ -110,16 +55,15 @@ pub fn translate<R: Iterator<Item = io::Result<char>>, W: Write>(
                 } else {
                     let mut buf = [0u8, 0, 0, 0];
                     let s = ch.encode_utf8(&mut buf);
-                    output.write(s.as_bytes())?;
+                    output.write(s.as_bytes()).map_err(TranslateError::Output)?;
                 }
             }
         }
     }
     if slash {
-        output.write(b"\\")?;
+        output.write(b"\\").map_err(TranslateError::Output)?;
     } else if dollar {
-        output.write(b"$")?;
+        output.write(b"$").map_err(TranslateError::Output)?;
     }
-
     Ok(())
 }
