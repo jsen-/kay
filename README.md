@@ -26,22 +26,32 @@ OPTIONS:
  - input must be utf8 (this might change, see TODO)
 
 ## example
+`input.txt`
 ```
-$ cat dashboard-user.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: ${env KUBE_USER}
-  namespace: ${env NAMESPACE}
-
-$ NAMESPACE=test-ns KUBE_USER=karol kay --input-file=dashboard-user.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: karol
-  namespace: test-ns
+hello ${var $.world}!
+```
+`vars.json`:
+```json
+{ "world": "jsonWORLD!" }
+```
+`vars.yaml`:
+```yaml
+world: yamlWORLD
+```
+```bash
+$ kay -i input.txt --vars-file vars.json 
+hello jsonWORLD
+```
+```bash
+$ kay -i input.txt --vars-file vars.yaml 
+hello yamlWORLD
+```
+```bash
+$ echo 'happy ${env TEST_VAR}!' | TEST_VAR="birthday" kay
+happy birthday!
 ```
 
 ## TODO
  - respect BOM
- - `--vars-file` ... well, yes, this is not yet implemented
+ - make a proper expression parser
+ - support for piping expression results

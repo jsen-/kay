@@ -40,9 +40,9 @@ where
     pub fn col(&self) -> usize {
         self.col
     }
-    pub fn index(&self) -> usize {
-        self.index
-    }
+    // pub fn index(&self) -> usize {
+    //     self.index
+    // }
 }
 
 impl<T> From<T> for PositionIterator<T>

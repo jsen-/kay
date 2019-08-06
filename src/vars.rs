@@ -4,7 +4,6 @@ use std::io;
 use std::path::Path;
 use std::ffi::OsStr;
 use serde_json::Value as JsonValue;
-use strict_yaml_rust::StrictYamlLoader;
 
 use super::Error;
 
@@ -62,28 +61,40 @@ impl fmt::Debug for VarsFormat {
     }
 }
 
-pub trait Vars {
-    fn get(&self, path: &str) -> Result<&str, VarsError>;
-}
-
-#[derive(Debug)]
 pub enum VarsError {
     NotFound(String),
-    InvalidSelector(String),
+    InvalidSelector(String, Box<dyn std::fmt::Display>),
+    MultipleResults(String),
+    StringConv(String),
 }
 
 pub struct JsonVars {
     json: JsonValue,
 }
-impl Vars for JsonVars {
-    fn get(&self, path: &str) -> Result<&str, VarsError> {
-        // let mut selector = jsonpath_lib::selector(&self.json);
-        // selector(path);
+
+pub trait Vars {
+    fn get<'a>(&'a self, path: &'a str) -> Result<&'a str, VarsError> {
         Err(VarsError::NotFound(path.into()))
     }
 }
+impl Vars for JsonVars {
+    fn get<'a>(&'a self, path: &'a str) -> Result<&'a str, VarsError> {
+        let mut selector = jsonpath_lib::selector(&self.json);
+        let results = selector(path).map_err(|e| VarsError::InvalidSelector(path.into(), Box::new(e)))?;
+        if results.len() == 0 {
+            Err(VarsError::NotFound(path.into()))
+        } else if results.len() > 1 {
+            Err(VarsError::MultipleResults(path.into()))
+        } else {
+            match results.first().unwrap().as_str() {
+                None => Err(VarsError::StringConv(path.into())),
+                Some(val) => Ok(val)
+            }
+        }
+    }
+}
 impl JsonVars {
-    pub fn from_file<'a, P: AsRef<Path> + 'a>(path: P) -> Result<Self, super::Error<'a>> {
+    pub fn from_file<'a, P: AsRef<Path> + 'a>(path: P) -> Result<Self, Error<'a>> {
         let path = path.as_ref();
         let buffer = file_to_string(path)?;
         Ok(JsonVars {
@@ -95,24 +106,28 @@ impl JsonVars {
 
 pub struct YamlVars {}
 impl Vars for YamlVars {
-    fn get(&self, path: &str) -> Result<&str, VarsError> {
+    fn get<'a>(&'a self, path: &'a str) -> Result<&'a str, VarsError> {
         Err(VarsError::NotFound(path.into()))
     }
 }
 
 impl YamlVars {
-    pub fn from_file<'a, P: AsRef<Path> + 'a>(path: P) -> Result<Self, super::Error<'a>> {
+    pub fn from_file<'a, P: AsRef<Path> + 'a>(path: P) -> Result<JsonVars, Error<'a>> {
         let path = path.as_ref();
         let buffer = file_to_string(path)?;
-        let yaml = StrictYamlLoader::load_from_str(&buffer)
-            .map_err(|yaml_error| super::Error::YamlParseVars(path.into(), yaml_error));
-        Ok(YamlVars {})
+        // let yaml = StrictYamlLoader::load_from_str(&buffer)
+        //     .map_err(|yaml_error| Error::YamlParseVars(path.into(), yaml_error));
+        let json = serde_yaml::from_str::<serde_json::Value>(&buffer)
+            .map_err(|json_error| Error::YamlParseVars(path.into(), json_error))?;
+        Ok(JsonVars {
+            json
+        })
     }
 }
 
 pub struct EmptyVars {}
 impl Vars for EmptyVars {
-    fn get(&self, path: &str) -> Result<&str, VarsError> {
+    fn get<'a>(&'a self, path: &'a str) -> Result<&'a str, VarsError> {
         Err(VarsError::NotFound(path.into()))
     }
 }

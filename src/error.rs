@@ -3,7 +3,6 @@ use std::io;
 use std::fmt;
 use super::{InputStream, OutputStream, ExprInternalError, VarsError};
 
-#[derive(Debug)]
 pub enum Error<'a> {
     UnknownFormat,
     FileRead(PathBuf, io::Error),
@@ -11,7 +10,7 @@ pub enum Error<'a> {
     Input(InputStream<'a>, io::Error),
     Output(OutputStream<'a>, io::Error),
     JsonParseVars(PathBuf, serde_json::error::Error),
-    YamlParseVars(PathBuf, strict_yaml_rust::ScanError),
+    YamlParseVars(PathBuf, serde_yaml::Error),
     Expr(ExprInternalError),
     Vars(Option<PathBuf>, VarsError),
 }
@@ -39,9 +38,12 @@ impl<'a> fmt::Display for Error<'a> {
                     ExprInternalError::UnknownEnv(var_name) => write!(f, r#"Environment variable "{}" is not defined"#, var_name),
                 }
             }
-            Self::Vars(_, VarsError::InvalidSelector(selector)) => write!(f, r#"Variable selector "{}" is invalid"#, selector),
+            Self::Vars(_, VarsError::InvalidSelector(selector, err)) => write!(f, r#"Variable selector "{}" is invalid: {}"#, selector, err),
             Self::Vars(Some(path), VarsError::NotFound(selector)) => write!(f, r#"Variable "{}" not found in "{}""#, selector, path.display()),
-            Self::Vars(None, VarsError::NotFound(selector)) => write!(f, r#"No "vars-file" but input file is looking for {}"#, selector),
+            Self::Vars(Some(_path), VarsError::MultipleResults(selector)) => write!(f, r#"Multiple results match selector "{}""#, selector),
+            Self::Vars(Some(_path), VarsError::StringConv(selector)) => write!(f, r#"Unable to convert selector result to string {}"#, selector),
+            Self::Vars(None, _) => unreachable!(),
+
         }
     }
 }

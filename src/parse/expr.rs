@@ -10,7 +10,6 @@ pub enum ExprInternalError {
     UnknownEnv(String),
 }
 
-#[derive(Debug)]
 pub enum ExprError {
     Vars(VarsError),
     Input(io::Error),
